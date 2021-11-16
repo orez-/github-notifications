@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -107,7 +108,7 @@ impl NotificationSubject {
         if !matches!(self.r#type, SubjectType::PullRequest) {
             return Ok(None);
         }
-        Ok(Some(client.get(&self.url)?))
+        Ok(Some(client.get(&self.url, Some(Duration::from_secs(60)))?))
     }
 }
 
@@ -122,6 +123,29 @@ pub struct Notification {
     pub url: String,
 }
 
+// https://rust-lang.github.io/rfcs/3137-let-else.html
+// https://twitter.com/ekuber/status/1456686889755242499
+// 😫
+fn cache_is_fresh(path: &PathBuf, ttl: Option<Duration>) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    let ttl = match ttl {
+        Some(e) => e,
+        None => { return true; }
+    };
+    let metadata = match fs::metadata(path) {
+        Ok(e) => e,
+        Err(_) => { return false; }
+    };
+    let modified = match metadata.modified() {
+        Ok(e) => e,
+        Err(_) => { return false; }
+    };
+    let since = SystemTime::now().duration_since(modified).unwrap_or(Duration::ZERO);
+    since < ttl
+}
+
 pub struct Client {
     token: String,
 }
@@ -131,10 +155,11 @@ impl Client {
         Self { token }
     }
 
-    fn get<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
+    // No ttl means cache never expires
+    fn get<T: DeserializeOwned>(&self, url: &str, ttl: Option<Duration>) -> Result<T, Error> {
         let path = to_filename(url);
         let body: String;
-        if path.exists() {
+        if cache_is_fresh(&path, ttl) {
             body = fs::read_to_string(path)?;
         }
         else {
@@ -153,10 +178,10 @@ impl Client {
     }
 
     pub fn notifications(&self) -> Result<Vec<Notification>, Error> {
-        self.get(NOTIFICATIONS_URL)
+        self.get(NOTIFICATIONS_URL, Some(Duration::ZERO))
     }
 
     pub fn current_user(&self) -> Result<User, Error> {
-        self.get(SELF_URL)
+        self.get(SELF_URL, Some(Duration::from_secs(60 * 60 * 24)))
     }
 }
