@@ -1,4 +1,5 @@
 use std::env;
+use std::process;
 mod github;
 
 #[derive(Debug)]
@@ -67,7 +68,15 @@ fn format_level(level: &NotificationLevel) -> String {
 }
 
 fn main() {
-    let token = env::var("GITHUB_TOKEN").unwrap();
+    let token = match env::var("GITHUB_TOKEN") {
+        Ok(t) => t,
+        Err(_) => {
+            eprintln!("Could not find GITHUB_TOKEN environment variable.");
+            eprintln!("  Please generate a token with the `repo` scope and assign it to the GITHUB_TOKEN environment variable.");
+            eprintln!("  https://github.com/settings/tokens");
+            process::exit(1);
+        }
+    };
     let client = github::Client::new(token);
     let notifications = client.notifications();
     for notif in notifications.unwrap() {
