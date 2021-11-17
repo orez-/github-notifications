@@ -1,3 +1,4 @@
+use std::env::temp_dir;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -16,7 +17,11 @@ fn to_filename(url: &str) -> PathBuf {
     let url = url.strip_prefix(API_PREFIX).unwrap_or(url);
     let url = url.replace('/', "__");
     let url = url.replace(|c| !matches!(c, 'a'..='z' | '0'..='9' | '.' | '_'), "");
-    PathBuf::from(format!("data/{}", &url))
+    let mut path = temp_dir();
+    path.push("github-notifications");
+    fs::create_dir_all(&path).unwrap();
+    path.push(url);
+    path
 }
 
 #[derive(Debug)]
