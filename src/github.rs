@@ -113,7 +113,9 @@ impl NotificationSubject {
         if !matches!(self.r#type, SubjectType::PullRequest) {
             return Ok(None);
         }
-        Ok(Some(client.get(&self.url, Some(Duration::from_secs(60)))?))
+        let ttl = Some(Duration::from_secs(60));
+        let response = client.get(&self.url, ttl)?;
+        Ok(Some(response))
     }
 }
 
@@ -183,10 +185,12 @@ impl Client {
     }
 
     pub fn notifications(&self) -> Result<Vec<Notification>, Error> {
-        self.get(NOTIFICATIONS_URL, Some(Duration::ZERO))
+        let ttl = Some(Duration::ZERO);
+        self.get(NOTIFICATIONS_URL, ttl)
     }
 
     pub fn current_user(&self) -> Result<User, Error> {
-        self.get(SELF_URL, Some(Duration::from_secs(60 * 60 * 24)))
+        let ttl = Some(Duration::from_secs(60 * 60 * 24));
+        self.get(SELF_URL, ttl)
     }
 }
