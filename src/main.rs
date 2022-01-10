@@ -19,13 +19,15 @@ impl NotificationLevel {
             Comment | Manual | Subscribed => NotificationLevel::Subscribed,
             Assign | Mention => NotificationLevel::Tagged,
             ReviewRequested => {
-                if let Some(pr) = notif.subject.pull_request(&client)? {
-                    let me = client.current_user()?;
-                    let tagged = pr.requested_reviewers.iter().any(|user| user.id == me.id);
-                    if tagged { NotificationLevel::Tagged }
-                    else { NotificationLevel::TeamTagged }
+                match notif.subject.details(&client)? {
+                    github::PrOrIssue::PullRequest(pr) => {
+                        let me = client.current_user()?;
+                        let tagged = pr.requested_reviewers.iter().any(|user| user.id == me.id);
+                        if tagged { NotificationLevel::Tagged }
+                        else { NotificationLevel::TeamTagged }
+                    }
+                    github::PrOrIssue::Issue(_) => NotificationLevel::Tagged,
                 }
-                else { NotificationLevel::Tagged }
             },
             TeamMention => NotificationLevel::TeamTagged,
             Invitation | StateChange | Other => NotificationLevel::Other,
@@ -81,14 +83,14 @@ fn main() {
     let notifications = client.notifications();
     for notif in notifications.unwrap() {
         let level = NotificationLevel::of(&notif, &client).unwrap();
-        let pr = notif.subject.pull_request(&client).unwrap().unwrap();
+        let pr = notif.subject.details(&client).unwrap();
         let title = notif.subject.title;
-        let title = match pr.state {
+        let title = match pr.state() {
             github::PullRequestState::Open => title,
             github::PullRequestState::Closed =>
                 to_color(&title, TerminalColor::FadedPurple),
         };
         println!("[{}] {}", format_level(&level), title);
-        println!("  {}", to_color(&pr.html_url, TerminalColor::Gray));
+        println!("  {}", to_color(&pr.html_url(), TerminalColor::Gray));
     }
 }

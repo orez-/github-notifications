@@ -68,6 +68,50 @@ pub struct PullRequest {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Issue {
+    pub url: String,
+    pub id: u64,
+    pub number: u64,
+    pub state: PullRequestState,
+    pub locked: bool,
+    pub title: String,
+    pub html_url: String,
+}
+
+pub enum PrOrIssue {
+    Issue(Issue),
+    PullRequest(PullRequest),
+}
+
+impl From<Issue> for PrOrIssue {
+    fn from(item: Issue) -> Self {
+        PrOrIssue::Issue(item)
+    }
+}
+
+impl From<PullRequest> for PrOrIssue {
+    fn from(item: PullRequest) -> Self {
+        PrOrIssue::PullRequest(item)
+    }
+}
+
+impl PrOrIssue {
+    pub fn html_url(&self) -> &str {
+        match self {
+            PrOrIssue::PullRequest(pr) => &pr.html_url,
+            PrOrIssue::Issue(issue) => &issue.html_url,
+        }
+    }
+
+    pub fn state(&self) -> &PullRequestState {
+        match self {
+            PrOrIssue::PullRequest(pr) => &pr.state,
+            PrOrIssue::Issue(issue) => &issue.state,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum PullRequestState {
     Open,
@@ -109,13 +153,13 @@ pub struct NotificationSubject {
 }
 
 impl NotificationSubject {
-    pub fn pull_request(&self, client: &Client) -> Result<Option<PullRequest>, Error> {
-        if !matches!(self.r#type, SubjectType::PullRequest) {
-            return Ok(None);
-        }
+    pub fn details(&self, client: &Client) -> Result<PrOrIssue, Error> {
         let ttl = Some(Duration::from_secs(60));
-        let response = client.get(&self.url, ttl)?;
-        Ok(Some(response))
+        let obj = match self.r#type {
+            SubjectType::Issue => client.get::<Issue>(&self.url, ttl)?.into(),
+            SubjectType::PullRequest => client.get::<PullRequest>(&self.url, ttl)?.into(),
+        };
+        Ok(obj)
     }
 }
 
